@@ -130,33 +130,33 @@ void nonRestoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, 
     if(leftHalf >= divisor)
         throw std::string("divide overflow");
 
+    dividend <<= 1;
+    dividend += alignCompDivisor;
+    dividend &= static_cast<uint64_t>(pow(2, wsize *2 +1) - 1);
+
     for(int i = 0; i < wsize; i++) {
-        dividend &= static_cast<uint64_t>(pow(2, wsize *2) - 1);
+        ebit = (dividend >> (2 * wsize)) & 1;
+
+        dividend &= static_cast<uint64_t>(pow(2, wsize *2 +1) - 1);
         dividend <<= 1;
 
-        ebit = (dividend >> (2 * wsize)) & 1;
         if(ebit == 0) {
             dividend += alignCompDivisor;
+            dividend |= 1;
             ops++;
         } else {
             dividend += aligndivisor;
+            dividend |= 0;
             ops++;
         }
-
-        ebit = (dividend >> (2 * wsize)) & 1;
-        if(ebit == 0) {
-            dividend |= 1;
-        } else {
-            dividend |= 0;
-        }
     }
+
     ebit = (dividend >> (2 * wsize)) & 1;
     if(ebit == 1) {
         dividend += aligndivisor;
-        ops++;
     }
 
-    dividend &= static_cast<uint64_t>(pow(2, wsize *2) - 1);
+    dividend &= static_cast<uint64_t>(pow(2, wsize *2 + 1) - 1);
     quotient = dividend & static_cast<uint32_t>(pow(2, wsize) - 1);
     remainder = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
 }
@@ -188,7 +188,6 @@ int main(int argc, char* argv[]) {
              in >> b1;
              in >> b2;
 
-             std::cout << b1 << "  " << b2 << std::endl;
              u1 = binaryToValue(b1);
              u2 = binaryToValue(b2);
              assert(9 <= b1.size() && b1.size() <= 25);
@@ -198,7 +197,7 @@ int main(int argc, char* argv[]) {
                  p1 = high_resolution_clock::now();
                  for(int i = 0; i < 100000; i++) {
                     ops = 0;
-                    restoreMethod(u1, u2, b1.size(), ops, quotient, remainder);
+                    restoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
                  }
                  p2 = high_resolution_clock::now();
                  result = duration_cast<microseconds>(p2 - p1);
@@ -210,7 +209,6 @@ int main(int argc, char* argv[]) {
                      << "," << b1.size() << ",null,"
                      << b1.size() + 1 << ",null" << std::endl;
              }
-             std::cout << std::endl;
 
           }
 
@@ -239,7 +237,7 @@ int main(int argc, char* argv[]) {
                  p1 = high_resolution_clock::now();
                  for(int i = 0; i < 100000; i++) {
                     ops = 0;
-                    nonRestoreMethod(u1, u2, b1.size(), ops, quotient, remainder);
+                    nonRestoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
                  }
                  p2 = high_resolution_clock::now();
                  result = duration_cast<microseconds>(p2 - p1);
@@ -254,6 +252,7 @@ int main(int argc, char* argv[]) {
           }
 
     } catch(std::string s) {
+        std::cout << "exception caught\n" << std::endl;
         std::cout << s << std::endl;
         return 1;
     }
