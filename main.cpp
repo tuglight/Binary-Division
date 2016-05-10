@@ -78,17 +78,28 @@ std::string snip(std::string s, char delim) {
  * @param("remainder") - remainder portion of the answer after the operation
  */
 void restoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uint32_t& quotient, uint32_t& remainder) {
-    uint32_t leftHalf = dividend >> wsize;
+    uint32_t sign1 = dividend >> (wsize * 2);
+    uint32_t sign2 = divisor >> wsize;
+    uint32_t leftHalf = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
+    uint32_t divisorMag = divisor & static_cast<uint32_t>(pow(2, wsize) - 1);
+
+    if(leftHalf > divisorMag)
+        throw std::string("divide overflow");
+
+    std::cout << valueToBinary(dividend) << std::endl;
+    dividend &= static_cast<uint32_t>(pow(2,wsize) - 1);
+    std::cout << valueToBinary(dividend) << std::endl;
     uint32_t compdivisor = (~divisor & static_cast<uint32_t>(pow(2, wsize + 1) - 1)) + 1;
     uint64_t aligndivisor = divisor << wsize;
     uint64_t alignCompDivisor = compdivisor << wsize;
 
-    if(leftHalf >= divisor)
-        throw std::string("divide overflow");
+    std::cout << valueToBinary(compdivisor) << std::endl;
 
     for(int i = 0; i < wsize; i++) {
-        dividend &= static_cast<uint64_t>(pow(2, wsize *2 + 1) - 1);
+        dividend &= static_cast<uint64_t>(pow(2, wsize * 2 + 1) - 1);
         dividend <<= 1;
+
+        std::cout << valueToBinary(dividend) << std::endl;
 
         dividend += alignCompDivisor;
         ops++;
@@ -106,6 +117,10 @@ void restoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uin
 
     dividend &= static_cast<uint64_t>(pow(2, wsize *2) - 1);
     quotient = dividend & static_cast<uint32_t>(pow(2, wsize) - 1);
+    if(sign1 ^ sign2 == 1) {
+        quotient = -quotient;
+    }
+
     remainder = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
 }
 
@@ -121,7 +136,9 @@ void restoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uin
  * @param("remainder") - remainder portion of the answer after the operation
  */
 void nonRestoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uint32_t& quotient, uint32_t& remainder) {
-    uint32_t leftHalf = dividend >> wsize;
+    uint32_t sign1 = dividend >> (wsize * 2);
+    uint32_t sign2 = divisor >> wsize;
+    uint32_t leftHalf = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
     uint32_t compdivisor = (~divisor & static_cast<uint32_t>(pow(2, wsize + 1) - 1)) + 1;
     uint64_t aligndivisor = divisor << wsize;
     uint64_t alignCompDivisor = compdivisor << wsize;
@@ -185,31 +202,26 @@ int main(int argc, char* argv[]) {
               << std::endl;
 
           while(!in.eof()) {
-             in >> b1;
-             in >> b2;
+              in >> b1;
+              in >> b2;
 
-             u1 = binaryToValue(b1);
-             u2 = binaryToValue(b2);
-             assert(9 <= b1.size() && b1.size() <= 25);
-             assert(5 <= b2.size() && b2.size() <= 13);
+              u1 = binaryToValue(b1);
+              u2 = binaryToValue(b2);
+              assert(9 <= b1.size() && b1.size() <= 25);
+              assert(5 <= b2.size() && b2.size() <= 13);
 
-             try {
-                 p1 = high_resolution_clock::now();
-                 for(int i = 0; i < 100000; i++) {
-                    ops = 0;
-                    restoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
-                 }
-                 p2 = high_resolution_clock::now();
-                 result = duration_cast<microseconds>(p2 - p1);
-                 out << b1 << "," << b2 << "," << quotient << ',' << remainder
-                     << "," << b1.size() << "," << result.count() << ","
-                     << b1.size() + 1 << "," << ops << std::endl;
-             } catch(std::string s) {
-                 out << b1 << "," << b2 << "," << "overflow, overflow"
-                     << "," << b1.size() << ",null,"
-                     << b1.size() + 1 << ",null" << std::endl;
-             }
+              try {
+                  ops = 0;
+                  restoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
+                  out << binaryToValue(b1) << "," << binaryToValue(b2) << "," << quotient << ',' << remainder
+                      << "," << b1.size() << "," << result.count() << ","
+                      << b1.size() + 1 << "," << ops << std::endl;
 
+              } catch(std::string s) {
+                  out << b1 << "," << b2 << "," << "overflow, overflow"
+                      << "," << b1.size() << ",null,"
+                      << b1.size() + 1 << ",null" << std::endl;
+              }
           }
 
           in.close();
@@ -226,29 +238,24 @@ int main(int argc, char* argv[]) {
               << std::endl;
 
           while(!in.eof()) {
-             in >> b1;
-             in >> b2;
-             u1 = binaryToValue(b1);
-             u2 = binaryToValue(b2);
-             assert(9 <= b1.size() && b1.size() <= 25);
-             assert(5 <= b2.size() && b2.size() <= 13);
+              in >> b1;
+              in >> b2;
+              u1 = binaryToValue(b1);
+              u2 = binaryToValue(b2);
+              assert(9 <= b1.size() && b1.size() <= 25);
+              assert(5 <= b2.size() && b2.size() <= 13);
 
-             try {
-                 p1 = high_resolution_clock::now();
-                 for(int i = 0; i < 100000; i++) {
-                    ops = 0;
-                    nonRestoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
-                 }
-                 p2 = high_resolution_clock::now();
-                 result = duration_cast<microseconds>(p2 - p1);
-                 out << b1 << "," << b2 << "," << quotient << ',' << remainder
-                     << "," << b1.size() << "," << result.count() << ","
-                     << b1.size() + 1 << "," << ops << std::endl;
-             } catch(std::string s) {
-                 out << b1 << "," << b2 << "," << "overflow, overflow"
-                     << "," << b1.size() << ",null,"
-                     << b1.size() + 1 << ",null" << std::endl;
-             }
+              try {
+                  ops = 0;
+                  nonRestoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
+                  out << b1 << "," << b2 << "," << quotient << ',' << remainder
+                      << "," << b1.size() << "," << result.count() << ","
+                      << b1.size() + 1 << "," << ops << std::endl;
+              } catch(std::string s) {
+                  out << b1 << "," << b2 << "," << "overflow, overflow"
+                      << "," << b1.size() << ",null,"
+                      << b1.size() + 1 << ",null" << std::endl;
+              }
           }
 
     } catch(std::string s) {
