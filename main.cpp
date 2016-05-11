@@ -77,29 +77,24 @@ std::string snip(std::string s, char delim) {
  * @param("quotient") - quotient portion of the answer after the operation
  * @param("remainder") - remainder portion of the answer after the operation
  */
-void restoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uint32_t& quotient, uint32_t& remainder) {
+void restoreMethod(int64_t dividend, int32_t divisor, int wsize, int& ops, int32_t& quotient, int32_t& remainder) {
     uint32_t sign1 = dividend >> (wsize * 2);
     uint32_t sign2 = divisor >> wsize;
     uint32_t leftHalf = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
     uint32_t divisorMag = divisor & static_cast<uint32_t>(pow(2, wsize) - 1);
 
-    if(leftHalf > divisorMag)
+    if(leftHalf >= divisorMag)
         throw std::string("divide overflow");
-
-    std::cout << valueToBinary(dividend) << std::endl;
-    dividend &= static_cast<uint32_t>(pow(2,wsize) - 1);
-    std::cout << valueToBinary(dividend) << std::endl;
+    
+    dividend &= static_cast<uint32_t>(pow(2,wsize*2) - 1);
     uint32_t compdivisor = (~divisor & static_cast<uint32_t>(pow(2, wsize + 1) - 1)) + 1;
-    uint64_t aligndivisor = divisor << wsize;
+    uint64_t aligndivisor = divisorMag << wsize;
     uint64_t alignCompDivisor = compdivisor << wsize;
-
-    std::cout << valueToBinary(compdivisor) << std::endl;
+    alignCompDivisor |= (1 << (wsize * 2)); // always set the ebit for the divisor to 1
 
     for(int i = 0; i < wsize; i++) {
         dividend &= static_cast<uint64_t>(pow(2, wsize * 2 + 1) - 1);
         dividend <<= 1;
-
-        std::cout << valueToBinary(dividend) << std::endl;
 
         dividend += alignCompDivisor;
         ops++;
@@ -120,7 +115,6 @@ void restoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uin
     if(sign1 ^ sign2 == 1) {
         quotient = -quotient;
     }
-
     remainder = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
 }
 
@@ -135,133 +129,122 @@ void restoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uin
  * @param("quotient") - quotient portion of the answer after the operation
  * @param("remainder") - remainder portion of the answer after the operation
  */
-void nonRestoreMethod(uint64_t dividend, uint32_t divisor, int wsize, int& ops, uint32_t& quotient, uint32_t& remainder) {
+void nonRestoreMethod(int64_t dividend, int32_t divisor, int wsize, int& ops, int32_t& quotient, int32_t& remainder) {
     uint32_t sign1 = dividend >> (wsize * 2);
     uint32_t sign2 = divisor >> wsize;
     uint32_t leftHalf = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
-    uint32_t compdivisor = (~divisor & static_cast<uint32_t>(pow(2, wsize + 1) - 1)) + 1;
-    uint64_t aligndivisor = divisor << wsize;
-    uint64_t alignCompDivisor = compdivisor << wsize;
-    uint64_t ebit;
+    uint32_t divisorMag = divisor & static_cast<uint32_t>(pow(2, wsize) - 1);
 
-    if(leftHalf >= divisor)
+    if(leftHalf >= divisorMag)
         throw std::string("divide overflow");
 
-    dividend <<= 1;
-    dividend += alignCompDivisor;
-    dividend &= static_cast<uint64_t>(pow(2, wsize *2 +1) - 1);
+    dividend &= static_cast<uint32_t>(pow(2, wsize*2) - 1);
+    uint32_t compdivisor = (~divisor & static_cast<uint32_t>(pow(2, wsize + 1) - 1)) + 1;
+    uint64_t aligndivisor = divisorMag << wsize;
+    uint64_t alignCompDivisor = compdivisor << wsize;
+    alignCompDivisor |= (1 << (wsize * 2)); // always set the ebit for the divisor to 1
+    uint64_t ebit;
 
     for(int i = 0; i < wsize; i++) {
         ebit = (dividend >> (2 * wsize)) & 1;
-
-        dividend &= static_cast<uint64_t>(pow(2, wsize *2 +1) - 1);
         dividend <<= 1;
-
+        dividend &= static_cast<uint64_t>(pow(2, wsize *2 +1) - 1);
+        
         if(ebit == 0) {
             dividend += alignCompDivisor;
-            dividend |= 1;
             ops++;
         } else {
             dividend += aligndivisor;
-            dividend |= 0;
             ops++;
         }
-    }
+        dividend &= static_cast<uint64_t>(pow(2, wsize *2 +1) - 1);
+        
+        ebit = (dividend >> (2 * wsize)) & 1;
+        if(ebit == 0) {
+            dividend |= 1;
+        } else {
+            dividend |= 0;
+        }
 
+    }
+    
     ebit = (dividend >> (2 * wsize)) & 1;
     if(ebit == 1) {
         dividend += aligndivisor;
     }
 
-    dividend &= static_cast<uint64_t>(pow(2, wsize *2 + 1) - 1);
+    dividend &= static_cast<uint64_t>(pow(2, wsize *2) - 1);
     quotient = dividend & static_cast<uint32_t>(pow(2, wsize) - 1);
+    if(sign1 ^ sign2 == 1) {
+        quotient = -quotient;
+    }
     remainder = (dividend >> wsize) & static_cast<uint32_t>(pow(2, wsize) - 1);
 }
 
 int main(int argc, char* argv[]) {
     std::string b1, b2;
-    uint64_t u1;
-    uint32_t u2, remainder, quotient;
+    int64_t u1;
+    int32_t u2, remainder, quotient;
     high_resolution_clock::time_point p1, p2;
     microseconds result;
-    int32_t ops;
+    int32_t wsize, ops, mag1, mag2;
+    char sign1, sign2;
 
-    try {
-          // input file
-          std::fstream in("input.txt", std::fstream::in);
-          if(!in.is_open())
-              throw std::string("input.txt does not exist.");
+    std::fstream restore("restore_method.csv", std::fstream::out);
+    if(!restore.is_open())
+      throw std::string("Cannot open the restore_method.csv file.");
 
-          // output for add and shift
-          std::fstream out("restore_method.csv", std::fstream::out);
-          if(!out.is_open())
-              throw std::string("Cannot open the results.csv file.");
+    // add and shift
+    restore << "dividend,divisor,quotient,remainder,iterations,ops" << std::endl;
 
-          // add and shift
-          out << "dividend,divisor,quotient,remainder,length,time,iterations,ops"
-              << std::endl;
+    std::fstream nonrestore("non_restore_method.csv", std::fstream::out);
+    if(!nonrestore.is_open())
+      throw std::string("Cannot open the non_restore_method.csv file.");
 
-          while(!in.eof()) {
-              in >> b1;
-              in >> b2;
+    // add and shift
+    nonrestore << "dividend,divisor,quotient,remainder,iterations,ops" << std::endl;
 
-              u1 = binaryToValue(b1);
-              u2 = binaryToValue(b2);
-              assert(9 <= b1.size() && b1.size() <= 25);
-              assert(5 <= b2.size() && b2.size() <= 13);
+    while(std::cin.good()) {
+        std::cin >> b1;
+        std::cin >> b2;
 
-              try {
-                  ops = 0;
-                  restoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
-                  out << binaryToValue(b1) << "," << binaryToValue(b2) << "," << quotient << ',' << remainder
-                      << "," << b1.size() << "," << result.count() << ","
-                      << b1.size() + 1 << "," << ops << std::endl;
+        if(std::cin.eof()) break;
+        
+        u1 = binaryToValue(b1);
+        u2 = binaryToValue(b2);
+        assert(9 <= b1.size() && b1.size() <= 25);
+        assert(5 <= b2.size() && b2.size() <= 13);
+        wsize = b2.size() - 1;
+        
+        ops = 0;
+        sign1 = b1[0];
+        b1.erase(b1.begin());
+        mag1 = binaryToValue(b1);
 
-              } catch(std::string s) {
-                  out << b1 << "," << b2 << "," << "overflow, overflow"
-                      << "," << b1.size() << ",null,"
-                      << b1.size() + 1 << ",null" << std::endl;
-              }
-          }
+        sign2 = b2[0];
+        b2.erase(b2.begin());
+        mag2 = binaryToValue(b2);
 
-          in.close();
-          in.open("input.txt", std::fstream::in);
-          if(!in.is_open())
-              throw std::string("input.txt does not exist.");
+        try {
+            std::cout << valueToBinary(u1) << std::endl;
+            restoreMethod(u1, u2, wsize, ops, quotient, remainder);
+            restore << ((sign1 == '0')?mag1:-mag1) << "," << ((sign2 == '0')?mag2:-mag2) << "," << quotient << ',' << remainder
+                << "," << wsize << "," << ops << std::endl;
+        } catch (std::string) {
+            restore << ((sign1 == '0')?mag1:-mag1) << "," << ((sign2 == '0')?mag2:-mag2) << "," << "overflow, overflow"
+                << ",null,null" << std::endl;
+        }
 
-          out.close();
-          out.open("non_restore_method.csv", std::fstream::out);
-          if(!out.is_open())
-              throw std::string("Cannot open the results.csv file.");
-
-          out << "dividend,divisor,quotient,remainder,length,time,iterations,ops"
-              << std::endl;
-
-          while(!in.eof()) {
-              in >> b1;
-              in >> b2;
-              u1 = binaryToValue(b1);
-              u2 = binaryToValue(b2);
-              assert(9 <= b1.size() && b1.size() <= 25);
-              assert(5 <= b2.size() && b2.size() <= 13);
-
-              try {
-                  ops = 0;
-                  nonRestoreMethod(u1, u2, b2.size() - 1, ops, quotient, remainder);
-                  out << b1 << "," << b2 << "," << quotient << ',' << remainder
-                      << "," << b1.size() << "," << result.count() << ","
-                      << b1.size() + 1 << "," << ops << std::endl;
-              } catch(std::string s) {
-                  out << b1 << "," << b2 << "," << "overflow, overflow"
-                      << "," << b1.size() << ",null,"
-                      << b1.size() + 1 << ",null" << std::endl;
-              }
-          }
-
-    } catch(std::string s) {
-        std::cout << "exception caught\n" << std::endl;
-        std::cout << s << std::endl;
-        return 1;
+          
+        ops = 0;
+        try {
+            nonRestoreMethod(u1, u2, wsize, ops, quotient, remainder);
+            nonrestore << ((sign1 == '0')?mag1:-mag1) << "," << ((sign2 == '0')?mag2:-mag2) << "," << quotient << ',' << remainder
+                << "," << wsize << "," << ops << std::endl;
+        } catch(std::string s) {
+            nonrestore << ((sign1 == '0')?mag1:-mag1) << "," << ((sign2 == '0')?mag2:-mag2) << "," << "overflow, overflow"
+                << ",null,null" << std::endl;
+        }
     }
 
     return 0;
